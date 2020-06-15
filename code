@@ -1,0 +1,213 @@
+#!/usr/bin/python
+
+from itertools import *
+import numpy as np
+
+
+
+mauvaisprefixes = set([])
+database = np.load("tipe.npy").item()
+forme = {}
+
+def sommes_possibles(t, longueurt) : #renvoie la liste des sommes possibles avec des éléments d'une liste
+    sommes = {} 
+    for i in range(1, longueurt+1) :
+        for k in combinations(t, i) : #on itère sur les combinaisons possibles de i éléments parmi la liste t
+            s=0
+            for r in k : #pour chacune de ces combinaisons, on calcule la somme des i éléments, que l'on ajoute à la liste sommes qui sera retournée
+                s+=r
+                sommes[s]=1
+    return sommes
+
+
+def correspond(liste, longueurliste, petitcote, grandcote) : #renvoie vrai ou faux selon si la liste des côtés des carrés est un candidat crédible pour le pavage
+    compteur1 = 0
+    compteur2 = 0
+    compteur3 = 0
+    compteur4 = 0
+    compteur5 = 0
+    test1 = (petitcote//2) + 1
+    test2 = (petitcote//3) + 1
+    test3 = (petitcote//4) + 1
+    test4 = (petitcote//5) + 1
+    test5 = (petitcote//6) + 1
+    for i in liste : #on compte le nombre de carrés de côté supérieur à des valeurs de référence
+        if i>=test5 : 
+            compteur5+=1
+            if i>=test4 : 
+                compteur4+=1
+                if i>=test3 : 
+                    compteur3+=1
+                    if i>=test2 : 
+                        compteur2+=1
+                        if i>=test1 :
+                            compteur1+=1
+    if compteur1>=(grandcote//test1)+1 or compteur2>=2*(grandcote//test2)+1 or compteur3>=3*(grandcote//test3)+1 or compteur4>=4*(grandcote//test4)+1 or compteur5>=5*(grandcote//test5)+1 : #s'il y a trop de carrés de côté trop grand, on ne peut pas caser ces carrés dans le rectangle
+        return False
+    for i in range(longueurliste) : #pour chacun des éléments de la liste, on regarde si on peut "compléter les lignes" occupées par un carré avec les autres carrés de la liste, par exemple si on a un carré de côté 36 et que des carrés de 2, on ne pourra pas remplir la larg    eur du rectangle
+        tmp=liste[0]
+        del liste[0]
+        sommes = sommes_possibles(liste, longueurliste)
+        liste.append(tmp)
+        sommes[0]=1
+        if petitcote-tmp not in sommes or grandcote-tmp not in sommes :
+            return False
+    return True
+
+def case_en_haut_a_gauche(grandcote, petitcote, previous) : #renvoie la position de la case la plus à gauche parmi les cases les plus hautes dans une certaine forme
+    for i in range(previous[1], 0, -1) :
+        for j in range(2, grandcote+1) :
+            if (j, i) not in forme :
+                return((j, i))
+
+
+def place_carre(cote, position, petitcote, grandcote) : #renvoie vrai ou faux selon si un carré d'un certain coté est plaçable à une certaine position dans une certaine forme
+    x_position = position[0]
+    y_position = position[1]
+    i=0
+    while i<cote :
+        j=0
+        while j<cote :
+            forme[(x_position+i, y_position-j)]=0
+            j+=1
+        i+=1
+
+
+
+def est_placable(position, cote, petitcote, grandcote) :
+    x_position = position[0]
+    y_position = position[1]
+    if x_position+cote>grandcote+1 or y_position-cote<1 :
+        return(False)
+    for i in range(1, cote) :
+        if (x_position+i, y_position) in forme :
+            return(False)
+    return(True)
+    
+
+def test_prefixe(liste, longueurliste) :
+    i=1
+    while i < longueurliste :
+        prefixeatester = liste[:i]
+        if prefixeatester in mauvaisprefixes : 
+            return False
+        i+=1
+    return True
+
+
+
+def pavage(listecotes, longueura, grandcote, petitcote, aire) : #regarde si on peut paver une certaine forme avec des carres de cotes donnés en paramètre : pour cela on itère sur toutes les permutations et on essaie de remplir la case la plus en haut à gauche à chaque fois
+    permutations_faites = set([])
+    for a in permutations(listecotes) :
+        if a in permutations_faites :
+            continue
+        else :
+            permutations_faites.add(a)
+        if not test_prefixe(a, longueura) :
+            continue
+        global forme
+        forme = {} 
+        n=0
+        caseenhautagauche = (1, petitcote+1)
+        while n<longueura:
+            carre = a[n]
+            if est_placable(caseenhautagauche, carre, petitcote, grandcote) :
+                place_carre(carre, caseenhautagauche, petitcote, grandcote)
+                n+=1
+                caseenhautagauche = case_en_haut_a_gauche(grandcote, petitcote, caseenhautagauche)
+            else :
+                mauvaisprefixes.add(a[:n+1])
+                break
+        if len(forme)==aire :
+            print(a)
+            return(True)
+    return(False)
+   
+
+def sicompose(grandcote, petitcote) :
+    minimum = petitcote * grandcote 
+    for i in range(1, (petitcote +1)) :
+        coupe1verticale = (i, petitcote-i)
+        coupe2verticale = (grandcote-i, petitcote)
+        coupe1horizontale = (i, grandcote-i)
+        coupe2horizontale = (petitcote-i, grandcote)
+        cas1 = database[coupe1verticale] + database[coupe2verticale] + 1
+        cas2 = database[coupe1horizontale] + database[coupe2horizontale] + 1
+        minimum = min(minimum, cas1, cas2)
+    return(minimum)
+
+
+def test_aire(liste, aire) :
+    s=0
+    for i in liste :
+        s+=i*i
+        if s>aire : 
+            return(False)
+    return(s==aire)
+
+
+
+def generalisation(longueur, largeur) : #renvoie le nombre minimal de carres pour paver un rectangle d'une certaine longueur et d'une certaine largeur
+    global mauvaisprefixes
+    mauvaisprefixes = set([]) 
+    n=0
+    petitcote = min(longueur, largeur)
+    grandcote = max(longueur, largeur)
+    plafond = sicompose(grandcote, petitcote)
+    print(plafond)
+    if petitcote==1 :
+        print("Solution pour le rectangle de ", longueur, " par ", largeur, " pour n = ", grandcote, " cotés")
+        reponse = [1 for k in range(grandcote)]
+        database[(longueur, largeur)] = grandcote
+        database[(largeur, longueur)] = grandcote
+        print(reponse)
+        return(True)
+    nombresde1apetitcoteinclus = [i for i in range(petitcote, 0, -1)]
+    aire = longueur * largeur
+    while n<plafond :
+        for k in combinations_with_replacement(nombresde1apetitcoteinclus, n) :
+            if test_aire(k, aire) :
+                liste = list(k)
+                if correspond(liste, n, petitcote, grandcote) :
+                    if pavage(liste, n, grandcote, petitcote, aire) :
+                        print("Solution pour le rectangle de ", longueur, " sur ", largeur, " pour n = ", n, " carrés : ")
+                        print("Le rectangle de ", longueur, " par ", largeur, " est premier")
+                        database[(longueur, largeur)] = n
+                        database[(largeur, longueur)] = n
+                        return(True)
+        print("Aucune solution pour n = ", n)
+        n+=1
+    print("Solution pour le rectangle de ", longueur, " par ", largeur, " pour n = ", plafond, " carrés : décomposer")
+    database[(longueur, largeur)] = n
+    database[(largeur, longueur)] = n
+    return(True)
+
+def pgcd(a, b) :
+    r = a%b
+    if r == 0 :
+        return(b)
+    else :
+        return(pgcd(b, r))
+
+def main(largeur, longueur) :
+    if (largeur, longueur) in database :
+        return(database[(largeur, longueur)])
+    d= pgcd(longueur, largeur)
+    if d != 1 :
+        return(main(largeur//d, longueur//d))
+    else :
+        return(generalisation(largeur, longueur))
+
+
+for i in range(15) :
+    for j in range(i+1) :
+        generalisation(i, j)
+
+
+#generalisation(19, 18)
+
+
+
+#peut-etre essayer de placer chaque permutation en partant des 4 coins
+np.save("tipe.npy", database)
+print(database)
